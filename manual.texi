@@ -1,0 +1,378 @@
+\input texinfo    @c Load Texinfo
+
+@set VERSION 1.0
+@set UPDATED April 22, 2025
+@set PROJNAME @dfn {nofo4maps}
+
+@settitle Explicit Numerical Computation of Normal Forms for Poincaré Maps
+@documentlanguage en
+@documentencoding UTF-8
+
+@copying
+This project is licensed under the GNU General Public License v3.0. See the @code{LICENSE} file for details.
+
+For more information about the GPL v3.0, please visit the official GNU website:  
+@uref{https://www.gnu.org/licenses/gpl-3.0.html, GNU General Public License v3.0}.
+@end copying
+
+
+@titlepage
+@c  @title {Explicit Numerical Computation of Normal Forms for Poincaré Maps}
+@title {A Sample Code Manual for Computing Normal Forms for Poincaré Maps}
+@subtitle {@value{PROJNAME} project}
+@subtitle {Version @value{VERSION}}
+@subtitle @value{UPDATED}
+@author {J. Gimeno, À. Jorba@sup{@dag{}}, M. Jorba-Cuscó, M. Zou}
+@page
+@vskip 0pt plus 1filll
+@insertcopying
+@end titlepage
+
+@c  @summarycontents
+@contents
+
+@node Top
+@top Explicit Numerical Computation of Normal Forms for Poincaré Maps
+
+
+@menu
+* Introduction::           Overview of the project and its objectives.
+* Software Requirements::  Required software and dependencies to build and run the code.
+* Usage::                  General usage guidelines, model dependencies, caveats, and suggestions for improvements.
+* 1-fixed-point::          Computing fixed points of the Poincaré map.
+* 2-jet-point-fix::        Calculating high-order derivatives at the fixed point.
+* 3-normal-form::          Constructing the normal form of the local model.
+* 4-twist::                Deriving a twist map from the computed normal form.
+* Acknowledgments::        Recognitions, contributions, and related references.
+@end menu
+
+
+@node Introduction
+@chapter Introduction
+
+The @value{PROJNAME} project has been formally documented in the manuscript @uref{http://www.maia.ub.es/dsg/2024/2405gimeno.pdf, GJJZ24}. This manual provides a basic code sample for computing normal forms on a Poincaré map, with the main goal of demonstrating the methodology for computing a normal form in the case of an elliptic fixed point.
+
+As an illustrative model , we use the classical @strong{Hénon-Heiles}
+system, a well-known Hamiltonian model in celestial mechanics. This system is one of
+the examples discussed in the manuscript. While the manuscript presents advanced methods,
+this manual serves as a complementary resource, offering a more accessible and
+practical guide to the methodology. For
+this particular example, we also compute the associated twist map around the elliptic fixed point.
+
+@c  As an illustrative model, we use the classical @strong{Hénon-Heiles} system, a well-known Hamiltonian model in celestial mechanics. This system is one of the examples discussed in the manuscript. While the manuscript presents advanced methods, this manual serves as a complementary resource, offering a more accessible and practical approach to understanding the methodology.
+
+The computation of normal forms does not require this assumption. However, the example is Hamiltonian and after computing the normal form, we proceed to compute the associated twist map around the elliptic fixed point.
+
+Through this manual, we aim to highlight the key steps, provide insights into necessary adaptations for other systems, and enhance the reproducibility of the work. We are also happy to provide further assistance, discuss details, and even share the undocumented version of the manuscript upon request. Our goal is to offer a clearer understanding of the methodology itself through this simplified presentation.
+
+
+@section The Discrete Hénon-Heiles System
+
+The Hénon-Heiles (HH) system is defined by the Hamiltonian:
+
+@displaymath
+H(x, y, p_x, p_y) = \frac{1}{2}(p_x^2 + p_y^2) + \frac{1}{2}(x^2 + y^2) + x^2 y - \frac{1}{3} y^3
+@end displaymath
+
+To study its dynamics in discrete time, we consider the Poincaré map @math{P\colon \{x = 0\} \to \{x = 0\}}, which describes the return of trajectories to the section @math{\{x = 0\}}.
+
+By fixing this section and selecting a specific energy level, the four-dimensional flow defined by @math{(x, y, p_x, p_y)} is effectively reduced to a two-dimensional map in variables @math{z = (y, p_y)}. The discrete system is then written as:
+
+@displaymath
+\bar{z} = P(z)
+@end displaymath
+
+Here, the map @math{P} incorporates both the fixed energy constraint and a flying time that depends on the initial condition @math{z}.
+
+This manual documents code that explores various aspects of @math{P}, through the following steps:
+
+@enumerate
+@item Compute a fixed point @math{z_0} of @math{P}; see @ref{1-fixed-point}.
+@item Compute high-order derivatives of @math{P} at @math{z_0}; see @ref{2-jet-fixed-point}.
+@item Compute the local normal form near @math{z_0}; see @ref{3-normal-form}.
+@item Construct a twist map if @math{z_0} is elliptic; see @ref{4-twist}.
+@end enumerate
+
+
+@node Software Requirements
+@chapter Software Requirements
+
+The code is written in C and has been successfully compiled using the GNU C Compiler (GCC) version 12.2.0. It is self-contained, requires no external libraries, and relies on providing appropriate initial guesses for correct execution.
+
+@section Optional Software
+
+Output files generated with the @uref{https://github.com/joang/taylor2-dist, Taylor v2.2} package are already included in the @code{0-model} folder. These files define data structures such as @code{MY_JET}, which encapsulate multivariate polynomial manipulation. The folder also contains commented examples on how to regenerate these files using the @code{taylor} tool, which may be useful for extending the current examples or adapting them to other contexts.
+
+Additionally, any standard linear algebra library (e.g., LAPACK) can be optionally used. In this sample project, we have taken advantage of the fact that the system reduces to a planar discrete map—even though the original Hénon-Heiles system resides in 4D phase space. Therefore, linear algebra routines such as solving linear systems and computing eigenvalues have been implemented specifically for 2-by-2 matrices.
+
+For more general use cases, the following capabilities are typically required:
+
+@itemize 
+@item A linear system solver
+@item An eigenvalue decomposition routine 
+@end itemize
+
+These are standard operations supported by most linear algebra libraries. Note that depending on the context of your specific problem, it may be necessary to perform these computations using complex arithmetic.
+
+
+@node Usage
+@chapter Usage
+To use the code, follow the folder structure in the specified order, adhering to the instructions in the accompanying @code{README} files or in the subsequent sections of this manual:
+
+@itemize
+@item @code{0-model}: Contains the model and outputs from @code{taylor} used in subsequent folders. Everything required for the sample is included here.
+@item @code{1-fixed-point}: Computes a fixed point of the Poincaré map for the Hénon-Heiles system, fixing an energy level and a spatial section at @math{x = 0}.
+@item @code{2-jet-fixed-point}: Computes the high-order derivatives of the Poincaré map at the fixed point computed in @code{1}.
+@item @code{3-normal-form}: Performs a change of coordinates on the jet obtained in @code{2} to derive its normal form.
+@item @code{4-twist}: Computes a twist map based on the output of @code{3}, leveraging the elliptic fixed point from @code{1} and the Hamiltonian nature of the system.
+@end itemize
+
+@node Warnings
+@section Warnings
+This code is a sample designed to illustrate the process of computing normal forms for Poincaré maps. Specifically, it addresses 2-by-2 systems, solving linear systems and computing eigenpairs.
+
+Note that this sample does not include components such as parameter-dependent normal forms or torus visualizations, as these are outside the scope of the demonstration and might detract from clarity. You can find the details in the associated manuscript of the @value{PROJNAME} project.
+
+@node Enhancements
+@section Enhancements
+You may consider the following improvements:
+
+@itemize
+@item Implement parameter-dependent normal forms.
+@item Develop the torus visualization for a radius within the validity range.
+@item Improve the linear algebra parts by incorporating custom libraries.
+@item Run the code with extended precision (this requires modifying the output files from @code{taylor} in the @code{0-model} folder).
+@item Use wrappers to run the code, particularly the part of @code{taylor}, in a different programming language, e.g., Python.
+@end itemize
+
+
+@node 0-model
+@unnumbered 0-model folder
+
+
+It contains the raw equations of the Hénon-Heiles system, those with extension @code{.eq}.
+
+@itemize
+@item @code{hh.eq} contains the ODE system and an expression to isolate the variable @code{py}, given an energy level (as an external variable) and assuming @code{x = 0}.
+@item @code{hh_vars.eq} is based on @code{hh.eq}, but includes an additional line to define jets with 2 symbols of degree 1.
+@item @code{hh_s2.eq} extends @code{hh_vars.eq} to allow jets of arbitrary degree.
+@item @code{hh_s1.eq} is similar to @code{hh_s2.eq}, but limited to a single symbol.
+@end itemize
+ 
+Each of these files contains commented lines indicating the corresponding command to run using @uref{https://github.com/joang/taylor2-dist, Taylor v2.2}. For example, the following commands:
+@example
+taylor -o hh.h -name ode -expression -header hh.eq
+taylor -o hh.c -name ode -expression -jet -step -headername ode.h hh.eq
+@end example
+were used to generate the output files @code{hh.c} and @code{hh.h} included in the @ref{0-model} directory. These commands invoke the @command{taylor} library, which processes the model described in @code{hh.eq} written in plain text form. For a detailed explanation of the command-line arguments, refer to the Taylor library manual.
+
+The generated output files includes two main data structures: @code{MY_FLOAT} and @code{MY_JET} declared in the @code{.h} files and implemented in @code{.c} files. @code{MY_JET} represents a multivariate polynomial whose coefficients are of type @code{MY_FLOAT}. In parts of this project, @code{MY_FLOAT} is configured to use complex numbers. Files with the suffix @code{_cmplx} indicate the use of complex arithmetic.
+
+The folder will then contain a pool of models with small variations in the @code{MY_FLOAT} and @code{MY_JET} data structures. From other parts of the project, we establish symbolic links to the appropriate model depending on the specific purpose of each component. See the following sections of this manual for more details.
+
+@quotation @strong{Observation} 
+Some models involving jets with varying numbers of symbols and degrees can be unified under a generic polynomial model with two symbols and arbitrary degree. In this approach, the specific computation or context determines which coefficients are actually needed at each step.
+
+Understanding the required number of symbols and degree for each computation not only serves as valuable training, but also allows one to take advantage of the different polynomial arithmetic implementations provided by @command{taylor}, helping to optimize both computational and memory efficiency.
+@end quotation
+
+
+@node 1-fixed-point
+@unnumbered 1-fixed-point folder
+
+This project computes the fixed point of a Poincaré map derived from the Hénon–Heiles system, specifically for the case where @code{x = 0} and at a fixed energy level @code{h_0}.
+
+@unnumberedsec File Description
+
+@itemize
+@item @code{ode.eq}, @code{ode.c}, and @code{ode.h}: Symbolic links to the model located in the model's folder.
+@item @code{la2d.h}, @code{la2d.c}: Linear algebra routines for 2-by-2 matrices.
+@item @code{newton.c} and @code{newton.h}: Code for computing a fixed point of the Poincaré map, given a sufficiently accurate initial guess.
+@item @code{main.c}: Contains the main code that uses the provided initial guesses.
+@end itemize
+
+
+Since this folder focuses on computing fixed points of a Poincaré map, it is necessary to also obtain derivatives of that map. For this reason, the model must compute the first-order variational flow of the Hénon–Heiles system.
+
+The symbolic links for @code{ode} were created with the following shell commands:
+
+@example
+ln -sf ../0-model/hh_vars.eq ode.eq
+ln -sf ../0-model/hh_vars.c ode.c
+ln -sf ../0-model/hh_vars.h ode.h
+@end example
+
+Note that since the option @code{-headername ode.h} was used when generating @code{ode.c}, it is appropriate to link to @code{ode.h} rather than @code{hh_vars.h}.
+
+@unnumberedsec Compiling and Execution
+
+To compile and run the program, follow these steps:
+
+@enumerate
+@item Use the provided @code{Makefile} to compile the code by executing:
+@example
+make
+@end example
+
+@item Run the executable with an output filename, e.g. @code{pfix}:
+@example
+./main.exe pfix
+@end example
+@end enumerate
+
+
+
+@node 2-jet-fixed-point
+@unnumbered 2-jet-fixed-point folder
+
+This project computes high-order derivatives of the Poincaré map at the fixed point of the Hénon–Heiles system, for a fixed energy level @code{h_0} and spatial section @code{x = 0}.
+
+@unnumberedsec File Description
+
+@itemize
+@item @code{ode.eq}, @code{ode.c}, and @code{ode.h}: Symbolic links to the model located in the model's folder. These files set the maximum degree for the Taylor expansion.
+@item @code{poinca.c} and @code{poinca.h}: Code for constructing the high-order derivatives of the Poincaré map. These are model-dependent.
+@item @code{main.c}: Contains the main code. It uses the fixed point (@code{pfix}) obtained from folder @ref{1-fixed-point}.
+@end itemize
+
+The symbolic links for @code{ode} and the input file were created using the following shell commands:
+
+@example
+ln -sf ../0-model/hh_s2.eq ode.eq
+ln -sf ../0-model/hh_s2.c ode.c
+ln -sf ../0-model/hh_s2.h ode.h
+ln -sf ../1-fixed-point/pfix
+@end example
+
+The jet expansion around the fixed point of the Poincaré map is performed using 2 symbols (corresponding to the dimension of the discrete system defined by the map) and a fixed maximum degree, which is set to 15 in @code{hh_s2.eq}.
+
+@unnumberedsec Compiling and Execution
+
+To compile and run the program, follow these steps:
+
+@enumerate
+@item Use the provided @code{Makefile} to compile the code by executing:
+@example
+make
+@end example
+
+@item Run the executable with an output filename, e.g. @code{jet_pfix}:
+@example
+./main.exe pfix jet_pfix
+@end example
+@end enumerate
+
+
+
+
+@node 3-normal-form
+@unnumbered 3-normal-form folder
+
+This project computes the normal form of the local approximation obtained in @ref{2-jet-fixed-point}.
+
+@unnumberedsec File Descriptions
+
+@itemize
+@item @code{ode.eq}, @code{ode.c}, and @code{ode.h}: Symbolic links to the model located in the model's folder. These files define the maximum degree for the expansion, with arithmetic using complex numbers.
+@item @code{la2d.h}, @code{la2d.c}: Implementations for linear algebra operations on 2-by-2 matrices.
+@item @code{nofo.c} and @code{nofo.h}: Provide functions for computing the normal form.
+@item @code{util_jet.h}, @code{util_jet.c}: Introduce a method to estimate the validity range of a jet.
+@item @code{main.c}: Contains the main program logic. It uses the @code{jet_pfix} from @ref{2-jet-fixed-point}.
+@end itemize
+
+
+
+The symbolic links on this folder have created using the following shell commands:
+
+@example
+ln -sf ../0-model/hh_s2.eq ode.eq
+ln -sf ../0-model/hh_s2_cmplx.c ode.c
+ln -sf ../0-model/hh_s2_cmplx.h ode.h
+ln -sf ../1-fixed-point/la2d.c
+ln -sf ../1-fixed-point/la2d.h
+ln -sf ../2-jet-fixed-point/jet_pfix
+@end example
+
+
+@unnumberedsec Compiling and Execution
+
+To compile and run the program, follow these steps:
+
+@enumerate
+@item Use the provided @code{Makefile} to compile the code by executing:
+@example
+make
+@end example
+
+@item Run the executable with an output filename, e.g. @code{nofo}:
+@example
+./main.exe jet_pfix nofo
+@end example
+@end enumerate
+
+@quotation @strong{Warnings}
+
+Some parts are model-dependent, such as the function @code{is_unavoidable_resonant} found in the @code{nofo} files.  
+The function @code{is_resonant_monomial} only detects potential unavoidable resonances for a given log10 tolerance, and may require adaptation for different scenarios.
+@end quotation
+
+
+
+
+@node 4-twist
+@unnumbered 4-twist folder
+
+This project computes a twist map from the normal form obtained in
+@ref{3-normal-form}.
+
+@unnumberedsec File Descriptions
+
+@itemize
+@item @code{ode.eq}, @code{ode.c}, and @code{ode.h}: Symbolic links to the model located in the model's folder. These files define the maximum degree for the expansion, using complex arithmetic. It is sufficient to consider half the number of symbols and (floor of) half the degree used in 
+@ref{3-normal-form}.
+@item @code{twist.c} and @code{twist.h}: Provide functions for computing the twist map from the normal form.
+@item @code{util_jet.h}, @code{util_jet.c}: Introduce a method to estimate the validity range of a jet.
+@item @code{main.c}: Contains the main program logic. It uses the @code{nofo} function from 
+@ref{3-normal-form}.
+@end itemize
+
+
+The symbolic links on this folder have created using the following shell commands:
+
+@example
+ln -sf ../0-model/hh_s1.eq ode.eq
+ln -sf ../0-model/hh_s1_cmplx.c ode.c
+ln -sf ../0-model/hh_s1_cmplx.h ode.h
+ln -sf ../3-normal-form/util_jet.c
+ln -sf ../3-normal-form/util_jet.h
+ln -sf ../3-nofo/nofo
+@end example
+
+@unnumberedsec Compiling and Execution
+
+To compile and run the program, follow these steps:
+
+@enumerate
+@item Use the provided @code{Makefile} to compile the code by executing:
+@example
+make
+@end example
+
+@item Run the executable with an output filename, e.g. @code{twist}:
+@example
+./main.exe nofo twist
+@end example
+@end enumerate
+
+@quotation @strong{Warnings}
+
+The twist computation may be sensitive to index selection, as only part of the normal form is used. This affects how the twist is obtained. The selection is user-dependent and should be carefully studied for each specific problem and research interest.
+@end quotation
+
+
+@unnumbered Acknowledgments
+
+We extend the acknowledgments in this manual to those included in the associated manuscript. Additionally, we are grateful to the anonymous referees whose feedback encouraged us to produce a more complete and accessible documentation of the original code sample.
+
+
+@bye  @c End of document
